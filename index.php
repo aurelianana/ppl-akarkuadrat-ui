@@ -133,26 +133,21 @@
     <div>
         <label for="number">Masukkan Angka:</label>
         <input type="number" id="number" step="any" placeholder="Angka yang ingin diakar kuadratkan">
-        <label for="decimal-places">Pecahan Desimal:</label>
-        <select id="decimal-places">
-            <option value="0">Tidak ada</option>
-            <option value="1">1 Desimal</option>
-            <option value="2">2 Desimal</option>
-            <option value="3">3 Desimal</option>
-            <option value="4">4 Desimal</option>
-        </select>
     </div>
-    <button onclick="calculateSquareRoot()">Hitung</button>
+    <button onclick="calculateSquareRoot()">Hitung dengan API</button>
+    <button onclick="calculateSquareRootWithSP()">Hitung dengan Stored Procedure</button>
     <button onclick="clearResult()">Clear</button>
     <div id="result"></div>
     <div id="history">
         <h3>Riwayat Input</h3>
-        <button id="clear-history-button" onclick="clearHistory()">Clear History</button>
+        <!-- <button id="clear-history-button" onclick="clearHistory()">Clear History</button> -->
         <table id="history-table">
             <thead>
                 <tr>
                     <th>Input</th>
                     <th>Hasil</th>
+                    <th>Type</th>
+                    <th>Execution Time</th>
                 </tr>
             </thead>
             <tbody id="history-list"></tbody>
@@ -160,10 +155,52 @@
     </div>
 
     <script>
+        const URL = 'http://127.0.0.1:8000'
+        fetchHistory();
         const historyList = document.getElementById('history-list');
         const historyTable = document.getElementById('history-table');
         const decimalPlacesSelect = document.getElementById('decimal-places');
         const numberInput = document.getElementById('number');
+
+        // Calculate square root with stored procedure
+        async function calculateSquareRootWithSP() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = ''; // Clear previous results
+
+            const number = parseFloat(numberInput.value);
+
+            if (isNaN(number) || number < 0) {
+                resultDiv.textContent = 'Masukkan angka positif yang valid.';
+                numberInput.classList.add('error');
+                return;
+            } else {
+                numberInput.classList.remove('error');
+            }
+
+            try {
+                const response = await fetch(`${URL}/api/akar-kuadrat-sql/${number}`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok.');
+                }
+                const data = await response.json();
+                if (data.error) {
+                    resultDiv.textContent = data.error;
+                } else {
+                    const resultText = `Akar kuadrat dari ${number} adalah ${data.hasil}`;
+                    resultDiv.textContent = resultText;
+
+                    // Add to history
+                    fetchHistory();
+                
+                    // Add the 'visible' class to show the result with animation
+                    resultDiv.classList.add('visible');
+                }
+            } catch (error) {
+                resultDiv.textContent = 'Terjadi kesalahan saat mengambil hasil.';
+            }
+        }
+
+
 
         // Calculate square root
         async function calculateSquareRoot() {
@@ -181,7 +218,7 @@
             }
 
             try {
-                const response = await fetch(`https://ppl-akarkuadrat-production.up.railway.app/api/akar-kuadrat/${number}`);
+                const response = await fetch(`${URL}/api/akar-kuadrat/${number}`);
                 if (!response.ok) {
                     throw new Error('Network response was not ok.');
                 }
@@ -189,11 +226,11 @@
                 if (data.error) {
                     resultDiv.textContent = data.error;
                 } else {
-                    const resultText = `Akar kuadrat dari ${number} adalah ${formatResult(data.result)}`;
+                    const resultText = `Akar kuadrat dari ${number} adalah ${data.hasil}`;
                     resultDiv.textContent = resultText;
 
                     // Add to history
-                    addToHistory(number, data.result);
+                    fetchHistory();
                 
                     // Add the 'visible' class to show the result with animation
                     resultDiv.classList.add('visible');
@@ -215,22 +252,43 @@
         }
 
         // Add to history table
-        function addToHistory(input, result) {
+        function addToHistory(result) {
             const historyRow = document.createElement('tr');
             const inputCell = document.createElement('td');
             const resultCell = document.createElement('td');
+            const typeCell = document.createElement('td');
+            const executionTimeCell = document.createElement('td');
 
-            inputCell.textContent = input;
-            resultCell.textContent = formatResult(result);
-
+            inputCell.textContent = result.angka;
+            resultCell.textContent = result.hasil;
+            typeCell.textContent = result.method;
+            executionTimeCell.textContent = result.execution_time;
             historyRow.appendChild(inputCell);
             historyRow.appendChild(resultCell);
+            historyRow.appendChild(typeCell);
+            historyRow.appendChild(executionTimeCell);
 
             historyList.appendChild(historyRow);
         }
 
+        // fetch table history from database
+        async function fetchHistory(){
+            await fetch(`${URL}/api/akar-kuadrat`).then(res => res.json()).then(data => {
+                
+                // object to array
+                const result = Object.values(data);
+                // clear table
+                historyList.innerHTML = '';
+                // add to table
+                result.forEach(element => {
+                    addToHistory(element);
+                });
+            });
+            
+        }
+
         // Format result based on selected decimal places
-        function formatResult(result) {
+        function result(){
             const selectedDecimalPlaces = parseInt(decimalPlacesSelect.value);
             return selectedDecimalPlaces === 0 ? Math.round(result) : result.toFixed(selectedDecimalPlaces);
         }
